@@ -15,3 +15,7 @@
 *.exe
 *.out
 *.app
+ev_drizzle
+
+# Other files
+.sconsign.dblite
