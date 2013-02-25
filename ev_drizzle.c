@@ -248,8 +248,9 @@ int main(int argc, char **argv)
 {
     int             ch;
     char           *cmd;
-    char            host[MAX_HOST_LEN];
-    unsigned int    port;
+    char            host[MAX_HOST_LEN + 1] = "127.0.0.1";
+    unsigned int    port = 3306;
+    size_t          len;
     client_t       *client;
     int             fd;
     drizzle_con_st *con, client_con;
@@ -264,7 +265,10 @@ int main(int argc, char **argv)
     while ((ch = getopt(argc, argv, "hH:P:")) != -1) {
         switch (ch) {
             case 'H':
-                memcpy(host, optarg, strnlen(optarg, MAX_HOST_LEN));
+                len = strnlen(optarg, MAX_HOST_LEN);
+                printf("%zu\n", len);
+                memcpy(host, optarg, len);
+                host[len] = '\0';
                 break;
             case 'P':
                 port = (unsigned int) atoi(optarg);
