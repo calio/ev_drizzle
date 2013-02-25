@@ -8,6 +8,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+
+#define MAX_HOST_LEN 256
 
 
 enum client_state {
@@ -234,8 +238,18 @@ void read_cb(EV_P_ struct ev_io *w, int revent)
     (void) do_process(client);
 }
 
+int usage(char *name)
+{
+    printf("Usage: %s [-p port] [-h host] sql\n", name);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
+    int             ch;
+    char           *cmd;
+    char            host[MAX_HOST_LEN];
+    unsigned int    port;
     client_t       *client;
     int             fd;
     drizzle_con_st *con, client_con;
@@ -244,10 +258,32 @@ int main(int argc, char **argv)
     struct ev_loop *loop = ev_default_loop(ev_recommended_backends() |
             EVBACKEND_KQUEUE);
 
-    if (argc != 2) {
-        printf("Usage: %s <sql>\n", argv[0]);
+
+    cmd = argv[0];
+
+    while ((ch = getopt(argc, argv, "h:p:")) != -1) {
+        switch (ch) {
+            case 'h':
+                memcpy(host, optarg, strnlen(optarg, MAX_HOST_LEN));
+                break;
+            case 'p':
+                port = (unsigned int) atoi(optarg);
+                break;
+            case '?':
+            default:
+                usage(cmd);
+                return 0;
+        }
+    }
+
+    argc -= optind;
+    argv += optind;
+
+    if (argc < 1) {
+        usage(cmd);
         return 0;
     }
+
 
     client = (client_t *) malloc(sizeof(client_t));
     if (client == NULL) {
@@ -256,7 +292,7 @@ int main(int argc, char **argv)
     }
 
     printf("Started...\n");
-    client->sql = argv[1];
+    client->sql = argv[0];
     client->len = strlen(client->sql);
 
     if (drizzle_create(&client->drizzle) == NULL) {
@@ -266,7 +302,7 @@ int main(int argc, char **argv)
 
     drizzle_add_options(&client->drizzle, DRIZZLE_NON_BLOCKING);
     con = drizzle_con_add_tcp(&client->drizzle, &client_con,
-            "127.0.0.1", 3306, "root", "", "", DRIZZLE_CON_MYSQL);
+            host, port, "root", "", "", DRIZZLE_CON_MYSQL);
 
     if (con == NULL) {
         printf("drizzle_con_add_tcp failed:%s\n",
