@@ -240,7 +240,7 @@ void read_cb(EV_P_ struct ev_io *w, int revent)
 
 int usage(char *name)
 {
-    printf("Usage: %s [-p port] [-h host] sql\n", name);
+    printf("Usage: %s [-P port] [-H host] [-h] sql\n", name);
     return 0;
 }
 
