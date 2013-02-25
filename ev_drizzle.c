@@ -261,14 +261,15 @@ int main(int argc, char **argv)
 
     cmd = argv[0];
 
-    while ((ch = getopt(argc, argv, "h:p:")) != -1) {
+    while ((ch = getopt(argc, argv, "hH:P:")) != -1) {
         switch (ch) {
-            case 'h':
+            case 'H':
                 memcpy(host, optarg, strnlen(optarg, MAX_HOST_LEN));
                 break;
-            case 'p':
+            case 'P':
                 port = (unsigned int) atoi(optarg);
                 break;
+            case 'h':
             case '?':
             default:
                 usage(cmd);
