@@ -1,5 +1,5 @@
 /*
- * Embed libdrizzle into libev
+ * Embed libdrizzle into libev event loop
  */
 
 #include "libdrizzle/drizzle_client.h"
@@ -189,7 +189,7 @@ int do_process(client_t *client)
     ret = drizzle_con_wait(&(client->drizzle));
     if (ret != DRIZZLE_RETURN_OK) {
         printf("drizzle_con_wait failed:%s\n", drizzle_error(&client->drizzle));
-        return;
+        return 0;
     }
 
     while (rc != DRIZZLE_RETURN_IO_WAIT) {
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("server started...\n");
+    printf("Started...\n");
     client->sql = argv[1];
     client->len = strlen(client->sql);
 

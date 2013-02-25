@@ -2,4 +2,4 @@
 
 Program('ev_drizzle', 'ev_drizzle.c',
         LIBS = ['ev', 'drizzle'],
-        CFLAGS='-g')
+        CFLAGS='-g -Wall')
