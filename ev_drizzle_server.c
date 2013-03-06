@@ -51,6 +51,21 @@ void stop_watch_read(connection_t *con)
     ev_io_stop(con->client->loop, &con->read_w);
 }
 
+void do_finalize(connection_t *con)
+{
+    drizzle_con_st *dc = con->dc;
+
+    dbgin();
+
+    stop_watch_write(con);
+    stop_watch_read(con);
+    drizzle_con_free(dc);
+
+    free(dc);
+    free(con);
+}
+
+
 void do_process(connection_t *con)
 {
     drizzle_st          *drizzle;
@@ -162,6 +177,8 @@ void do_process(connection_t *con)
                          command == DRIZZLE_COMMAND_QUIT))
                 {
                     free(data);
+
+                    do_finalize(con);
                     return;
                 }
 
@@ -273,20 +290,6 @@ void accept_cb(EV_P_ struct ev_io *w, int revent)
     add_connection(client, con);
 
 }
-
-void do_finalize(connection_t *con)
-{
-    drizzle_con_st *dc = con->dc;
-
-    dbgin();
-
-    drizzle_con_free(dc);
-
-    free(dc);
-    free(con);
-    printf("Close fd.\n");
-}
-
 
 int main(int argc, char *argv[])
 {
