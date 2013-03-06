@@ -1,5 +1,8 @@
+#define _DEBUG_ 1
+
 #include "libdrizzle/drizzle_server.h"
 #include "ev.h"
+#include "debug.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +13,8 @@ typedef enum connection_state {
     INIT         = 0,
     HANDSHAKE_WRITE,
     HANDSHAKE_READ,
+    HANDSHAKE_DONE,
+    PREPARE_COMMAND,
 } con_state;
 
 typedef struct client_st {
@@ -24,6 +29,7 @@ typedef struct connection_st {
     ev_io            write_w;
     client_t        *client;
     drizzle_con_st  *dc;
+    drizzle_result_st   *result;
     con_state        state;
 } connection_t;
 
@@ -33,13 +39,38 @@ void usage(const char *cmd)
     printf("Usage: %s [-h <host>] [-p <port>]\n", cmd);
 }
 
+void stop_watch_write(connection_t *con)
+{
+    dbgin();
+    ev_io_stop(con->client->loop, &con->write_w);
+}
+
+void stop_watch_read(connection_t *con)
+{
+    dbgin();
+    ev_io_stop(con->client->loop, &con->read_w);
+}
+
 void do_process(connection_t *con)
 {
-    drizzle_st       *drizzle;
-    drizzle_return_t ret;
-    drizzle_con_st *dc = con->dc;
+    drizzle_st          *drizzle;
+    drizzle_return_t     ret;
+    drizzle_con_st      *dc = con->dc;
+    drizzle_command_t    command;
+    uint8_t             *data = NULL;
+    size_t               total;
+
+    dbgin();
 
     drizzle = con->client->drizzle;
+
+    /*
+    ret = drizzle_con_wait(drizzle);
+    if (ret != DRIZZLE_RETURN_OK) {
+        printf("drizzle_con_wait failed:%s\n", drizzle_error(drizzle));
+        return;
+    }
+    */
 
     while (1) {
         switch (con->state) {
@@ -58,7 +89,7 @@ void do_process(connection_t *con)
                 break;
 
             case HANDSHAKE_WRITE:
-                printf("handshake\n");
+                printf("handshake write\n");
 
                 ret = drizzle_handshake_server_write(dc);
 
@@ -67,14 +98,108 @@ void do_process(connection_t *con)
                 }
 
                 if (ret == DRIZZLE_RETURN_OK) {
+                    stop_watch_write(con);
                     con->state = HANDSHAKE_READ;
                     break;
                 }
                 printf("drizzle_handshake_server_write error:%s",
                         drizzle_error(drizzle));
+                exit(1);
+                break;
+            case HANDSHAKE_READ:
+                printf("handshake read\n");
+
+                /* prepare libdrizzle internal event */
+                dc->revents |= POLLIN;
+
+                ret = drizzle_handshake_client_read(dc);
+
+                if (ret == DRIZZLE_RETURN_IO_WAIT) {
+                    return;
+                }
+
+                if (ret == DRIZZLE_RETURN_OK) {
+                    con->state = HANDSHAKE_DONE;
+                    break;
+                }
+                printf("drizzle_handshake_server_read error:%s",
+                        drizzle_error(drizzle));
+                exit(1);
+                break;
+
+            case HANDSHAKE_DONE:
+                printf("handshake done\n");
+                con->result = (drizzle_result_st *)
+                    malloc(sizeof(drizzle_result_st));
+                if (drizzle_result_create(dc, con->result) == NULL) {
+                    printf("drizzle_result_create error:%s",
+                            drizzle_error(drizzle));
+                    exit(1);
+                }
+
+                ret = drizzle_result_write(dc, con->result, true);
+                if (ret != DRIZZLE_RETURN_OK) {
+                    printf("drizzle_result_write error:%s",
+                            drizzle_error(drizzle));
+                    exit(1);
+                }
+                con->state = PREPARE_COMMAND;
+                break;
+            case PREPARE_COMMAND:
+                printf("prepare command\n");
+
+                /* prepare libdrizzle internal event */
+                dc->revents |= POLLIN;
+
+                drizzle_result_free(dc->result);
+
+                data = (uint8_t *) drizzle_con_command_buffer(dc, &command,
+                        &total, &ret);
+
+
+                if (ret == DRIZZLE_RETURN_LOST_CONNECTION ||
+                        (ret == DRIZZLE_RETURN_OK &&
+                         command == DRIZZLE_COMMAND_QUIT))
+                {
+                    free(data);
+                    return;
+                }
+
+                if (ret == DRIZZLE_RETURN_IO_WAIT) {
+                    return;
+                }
+
+                printf("Command data:%s\n", data);
+
+                if (drizzle_result_create(dc, con->result) == NULL) {
+                    printf("drizzle_result_create error:%s",
+                            drizzle_error(drizzle));
+                    exit(1);
+                }
+
+                if (command != DRIZZLE_COMMAND_QUERY) {
+                    printf("command is not QUERY command\n");
+                    ret = drizzle_result_write(dc, dc->result, true);
+                    if (ret != DRIZZLE_RETURN_OK) {
+                        printf("drizzle_result_write error:%s",
+                                drizzle_error(drizzle));
+                        exit(1);
+                    }
+                    continue;
+                }
+
+                ret = drizzle_result_write(dc, dc->result, true);
+                if (ret != DRIZZLE_RETURN_OK) {
+                    printf("drizzle_result_write error:%s",
+                            drizzle_error(drizzle));
+                    exit(1);
+                }
+
+                return;
                 break;
             default:
                 printf("Unsupported state %d\n", con->state);
+                //sleep(10);
         }
     }
 
@@ -83,6 +208,9 @@ void do_process(connection_t *con)
 void write_cb(EV_P_ struct ev_io *w, int revent)
 {
     connection_t *con = (connection_t *) w->data;
+
+    dbgin();
+
     do_process(con);
 }
 
@@ -90,13 +218,16 @@ void read_cb(EV_P_ struct ev_io *w, int revent)
 {
     connection_t *con = (connection_t *) w->data;
 
-    printf("read_cb called\n");
+    dbgin();
+
     do_process(con);
 }
 
 
 int add_connection(client_t *client, connection_t *con)
 {
+    dbgin();
+
     ev_io_init(&con->read_w, read_cb, con->fd, EV_READ);
     ev_io_init(&con->write_w, write_cb, con->fd, EV_WRITE);
     con->read_w.data = con;
@@ -115,7 +246,7 @@ void accept_cb(EV_P_ struct ev_io *w, int revent)
     int                 fd;
     connection_t       *con;
 
-    printf("accept_cb called\n");
+    dbgin();
 
     /* Manually set connection to ready */
     drizzle_con_add_options(client->dc, DRIZZLE_CON_IO_READY);
@@ -134,16 +265,28 @@ void accept_cb(EV_P_ struct ev_io *w, int revent)
     fd = drizzle_con_fd(dc);
     printf("Accepted. fd:%d\n", fd);
 
-    con = (connection_t *) malloc(sizeof(connection_t));
+    con = (connection_t *) calloc(1, sizeof(connection_t));
     con->fd = fd;
     con->client = client;
     con->dc = dc;
 
     add_connection(client, con);
 
+}
+
+void do_finalize(connection_t *con)
+{
+    drizzle_con_st *dc = con->dc;
+
+    dbgin();
+
     drizzle_con_free(dc);
+
+    free(dc);
+    free(con);
     printf("Close fd.\n");
 }
+
 
 int main(int argc, char *argv[])
 {
@@ -158,7 +301,9 @@ int main(int argc, char *argv[])
     int             accept_fd;
     client_t        client;
 
-    while ((c = getopt(argc, argv, "p:h")) != -1) {
+    dbgin();
+
+    while ((c = getopt(argc, argv, "p:h:")) != -1) {
         switch (c) {
             case 'p':
                 port = (in_port_t) atoi(optarg);

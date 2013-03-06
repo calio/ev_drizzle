@@ -8,4 +8,4 @@ Program('ev_drizzle', 'ev_drizzle.c',
 Program('ev_drizzle_server', 'ev_drizzle_server.c',
         CC='clang',
         LIBS = ['ev', 'drizzle'],
-        CFLAGS='-g -Wall')
+        CFLAGS='-g -O0 -Wall')
