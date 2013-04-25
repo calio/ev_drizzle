@@ -296,8 +296,8 @@ int main(int argc, char *argv[])
     int             c;
     drizzle_st      drizzle;
     drizzle_con_st  con_listen;
-    in_port_t       port = 0;
-    char           *host = "localhost";
+    in_port_t       port = 3307;
+    char           *host = NULL;
     struct ev_loop *loop = ev_default_loop(ev_recommended_backends() |
             EVBACKEND_KQUEUE);
     ev_io           accept_w;
@@ -346,6 +346,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    printf("Server started on host: %s, port: %d\n", host, port);
 
     client.drizzle = &drizzle;
     client.dc = &con_listen;

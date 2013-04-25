@@ -296,7 +296,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("Started...\n");
+    printf("Started. host: %s, port: %d\n", host, port);
     client->sql = argv[0];
     client->len = strlen(client->sql);
 
@@ -318,6 +318,7 @@ int main(int argc, char **argv)
     if (ret != DRIZZLE_RETURN_OK && ret != DRIZZLE_RETURN_IO_WAIT) {
         printf("drizzle_con_connect failed:%s\n",
                 drizzle_error(&client->drizzle));
+        return;
     }
 
     fd = drizzle_con_fd(con);
