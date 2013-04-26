@@ -110,9 +110,9 @@ int get_rows(client_t *client)
             if (field == NULL) {
                 printf("    (NULL)");
             } else if (offset > 0) {
-                printf("    %.*s", (int) length, field);
+                printf("    %.*s, lenght %d", (int) length, field, length);
             } else {
-                printf("    (%d %.*s", (int32_t)total, (int32_t)length, field);
+                printf("    (%d %.*s, length %d", (int32_t)total, (int32_t)length, field, length);
             }
 
             if (offset + length == total) {
