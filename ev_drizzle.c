@@ -110,9 +110,9 @@ int get_rows(client_t *client)
             if (field == NULL) {
                 printf("    (NULL)");
             } else if (offset > 0) {
-                printf("    %.*s, lenght %d", (int) length, field, length);
+                printf("    %.*s", (int) length, field);
             } else {
-                printf("    (%d %.*s, length %d", (int32_t)total, (int32_t)length, field, length);
+                printf("    (%d %.*s", (int32_t)total, (int32_t)length, field);
             }
 
             if (offset + length == total) {
@@ -318,7 +318,7 @@ int main(int argc, char **argv)
     if (ret != DRIZZLE_RETURN_OK && ret != DRIZZLE_RETURN_IO_WAIT) {
         printf("drizzle_con_connect failed:%s\n",
                 drizzle_error(&client->drizzle));
-        return;
+        return -1;
     }
 
     fd = drizzle_con_fd(con);
